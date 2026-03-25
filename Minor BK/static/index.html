@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NeuralState | EEG Stress Monitor</title>
+    <!-- Inter Font for modern UI feel -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #030712;
+            --panel: rgba(17, 24, 39, 0.7);
+            --border: rgba(255, 255, 255, 0.08);
+            --text-main: #f9fafb;
+            --text-muted: #9ca3af;
+            
+            /* State Colors */
+            --color-safe: #10b981;
+            --color-safe-glow: rgba(16, 185, 129, 0.3);
+            --color-warning: #f59e0b;
+            --color-warning-glow: rgba(245, 158, 11, 0.3);
+            --color-danger: #ef4444;
+            --color-danger-glow: rgba(239, 68, 68, 0.3);
+            
+            /* Active Theme (Defaults to safe) */
+            --accent: var(--color-safe);
+            --accent-glow: var(--color-safe-glow);
+        }
+
+        * {
+            box-sizing: border-box;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(16, 185, 129, 0.05) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(239, 68, 68, 0.05) 0%, transparent 40%);
+        }
+
+        /* Animated Background Wave */
+        .eeg-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            opacity: 0.15;
+            pointer-events: none;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 480px;
+            padding: 20px;
+            z-index: 10;
+        }
+
+        .main-card {
+            background: var(--panel);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border);
+            border-radius: 40px;
+            padding: 40px 30px;
+            text-align: center;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Top Status Bar */
+        .status-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        .live-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+        }
+
+        .dot {
+            width: 6px;
+            height: 6px;
+            background: #ef4444;
+            border-radius: 50%;
+            animation: blink 1.5s infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(0.8); }
+        }
+
+        /* The Neural Orb */
+        .orb-container {
+            position: relative;
+            width: 220px;
+            height: 220px;
+            margin: 0 auto 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .orb-outer {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            border: 1px solid var(--accent);
+            opacity: 0.2;
+            animation: rotate 10s linear infinite;
+        }
+
+        .orb-inner {
+            width: 160px;
+            height: 160px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, white 0%, transparent 60%), var(--accent);
+            box-shadow: 
+                0 0 40px var(--accent-glow),
+                inset 0 0 20px rgba(0,0,0,0.2);
+            transition: all 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+            position: relative;
+        }
+
+        .orb-inner::after {
+            content: '';
+            position: absolute;
+            inset: -15px;
+            border-radius: 50%;
+            border: 2px solid var(--accent);
+            opacity: 0.1;
+            animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); opacity: 0.5; }
+            100% { transform: scale(1.3); opacity: 0; }
+        }
+
+        /* Typography */
+        .score-display {
+            margin-bottom: 5px;
+        }
+
+        .score-value {
+            font-size: 80px;
+            font-weight: 800;
+            line-height: 1;
+            letter-spacing: -0.04em;
+            margin: 0;
+            background: linear-gradient(to bottom, #fff, var(--text-muted));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .status-text {
+            font-size: 24px;
+            font-weight: 600;
+            color: var(--accent);
+            margin-top: 10px;
+            text-transform: capitalize;
+        }
+
+        .meta-text {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-top: 15px;
+            font-weight: 400;
+        }
+
+        /* Grid Metrics */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 35px;
+        }
+
+        .metric-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 15px;
+            transition: transform 0.2s ease;
+        }
+
+        .metric-card:hover {
+            transform: translateY(-2px);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .metric-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+            display: block;
+        }
+
+        .metric-value {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        /* UI State Utilities */
+        .loading .orb-inner {
+            filter: grayscale(1) opacity(0.5);
+        }
+        
+        @media (max-width: 400px) {
+            .main-card { padding: 30px 20px; }
+            .orb-container { width: 180px; height: 180px; }
+            .orb-inner { width: 130px; height: 130px; }
+            .score-value { font-size: 60px; }
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="eegCanvas" class="eeg-bg"></canvas>
+
+    <div class="container">
+        <main class="main-card" id="app">
+            <header class="status-header">
+                <div class="live-indicator">
+                    <span class="dot"></span>
+                    Live EEG Stream
+                </div>
+                <div id="timestamp" style="font-size: 11px; color: var(--text-muted);">--:--:--</div>
+            </header>
+
+            <div class="orb-container">
+                <div class="orb-outer"></div>
+                <div id="orb" class="orb-inner"></div>
+            </div>
+
+            <div class="score-display">
+                <h1 id="score" class="score-value">--</h1>
+                <div id="status" class="status-text">Connecting...</div>
+            </div>
+
+            <p id="meta" class="meta-text">Initializing sensor link from ESP32...</p>
+
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <span class="metric-label">Mental Load</span>
+                    <div id="decision" class="metric-value">--</div>
+                </div>
+                <div class="metric-card">
+                    <span class="metric-label">Signal Clarity</span>
+                    <div id="confidence" class="metric-value">--</div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const elements = {
+            orb: document.getElementById("orb"),
+            score: document.getElementById("score"),
+            status: document.getElementById("status"),
+            meta: document.getElementById("meta"),
+            decision: document.getElementById("decision"),
+            confidence: document.getElementById("confidence"),
+            timestamp: document.getElementById("timestamp"),
+            canvas: document.getElementById("eegCanvas")
+        };
+
+        // --- BACKGROUND EEG ANIMATION ---
+        const ctx = elements.canvas.getContext('2d');
+        let width, height;
+        let points = [];
+        const waveSpeed = 2;
+        
+        function resize() {
+            width = elements.canvas.width = window.innerWidth;
+            height = elements.canvas.height = window.innerHeight;
+            points = Array.from({length: 100}, (_, i) => ({ x: (width / 100) * i, y: height / 2 }));
+        }
+
+        function animateWave() {
+            ctx.clearRect(0, 0, width, height);
+            ctx.beginPath();
+            ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--accent');
+            ctx.lineWidth = 2;
+            ctx.lineJoin = 'round';
+
+            points.forEach((p, i) => {
+                p.y = (height / 2) + Math.sin((Date.now() / 200) + (i * 0.5)) * 20;
+                if (i === 0) ctx.moveTo(p.x, p.y);
+                else ctx.lineTo(p.x, p.y);
+            });
+
+            ctx.stroke();
+            requestAnimationFrame(animateWave);
+        }
+
+        window.addEventListener('resize', resize);
+        resize();
+        animateWave();
+
+        // --- DATA UPDATES ---
+        function updateTheme(level) {
+            const root = document.documentElement;
+            if (level === "High") {
+                root.style.setProperty("--accent", "var(--color-danger)");
+                root.style.setProperty("--accent-glow", "var(--color-danger-glow)");
+            } else if (level === "Medium") {
+                root.style.setProperty("--accent", "var(--color-warning)");
+                root.style.setProperty("--accent-glow", "var(--color-warning-glow)");
+            } else {
+                root.style.setProperty("--accent", "var(--color-safe)");
+                root.style.setProperty("--accent-glow", "var(--color-safe-glow)");
+            }
+        }
+
+        async function fetchData() {
+            try {
+                // Updating local clock
+                const now = new Date();
+                elements.timestamp.textContent = now.toTimeString().split(' ')[0];
+
+                const response = await fetch("/predict", { cache: "no-store" });
+                if (!response.ok) throw new Error();
+
+                const data = await response.json();
+                
+                // Content Updates
+                updateTheme(data.stress_level);
+                elements.score.textContent = data.score;
+                elements.status.textContent = data.stress_level === "High" ? "System Stressed" : "Neural Calm";
+                elements.decision.textContent = data.stress_level;
+                elements.confidence.textContent = `${Math.round((Number(data.confidence ?? 0)) * 100)}%`;
+                elements.meta.textContent = "10s moving average active";
+                
+                document.getElementById('app').classList.remove('loading');
+            } catch (err) {
+                elements.status.textContent = "Offline";
+                elements.meta.textContent = "Waiting for live ESP32 signal...";
+                document.getElementById('app').classList.add('loading');
+            }
+        }
+
+        // Start loops
+        setInterval(fetchData, 1000);
+        fetchData();
+    </script>
+</body>
+</html>

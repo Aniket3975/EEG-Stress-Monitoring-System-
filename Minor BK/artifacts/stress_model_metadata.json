@@ -1,0 +1,11 @@
+{
+  "model_version": "spectral-bandpower-v3",
+  "validation_accuracy": 0.7556,
+  "n_samples": 675,
+  "n_features": 335,
+  "class_labels": [
+    -1,
+    0,
+    1
+  ]
+}
